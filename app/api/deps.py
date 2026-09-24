@@ -4,18 +4,24 @@ Shared FastAPI dependencies (auth guards, paywall checks, etc.).
 ``get_current_user`` is the critical dependency – it validates the JWT
 **and** enforces single-active-session by comparing the token's
 ``sid`` claim against the user's ``current_session_id`` in the database.
+
+``require_topic_access`` enforces the freemium paywall: free-preview
+topics are accessible to all authenticated users, while premium topics
+require an active, non-expired subscription.
 """
 
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
 from app.core.security import decode_access_token
-from app.models.user import User
+from app.models.user import Subscription, User
 
 # ── Bearer scheme (auto-populates Swagger "Authorize" button) ────────────
 _bearer_scheme = HTTPBearer()
@@ -107,3 +113,54 @@ def require_role(*allowed_roles: str):
         return user
 
     return _check_role
+
+
+# ── Paywall (subscription) guard ─────────────────────────────────────────
+
+
+async def require_topic_access(
+    topic_id: uuid.UUID,
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> None:
+    """
+    Enforce the freemium paywall for a given topic.
+
+    Resolution order
+    ~~~~~~~~~~~~~~~~
+    1. Load the topic – 404 if missing / unpublished.
+    2. If ``topic.is_free_preview`` is ``True``, access is granted
+       immediately (no subscription required).
+    3. Otherwise, query the ``subscriptions`` table for an active,
+       non-expired record for this user.
+    4. If no qualifying subscription exists, raise HTTP 403 with the
+       standardised ``PaywallResponse`` body.
+
+    This dependency is designed to be added to topic-content endpoints
+    that serve premium material.
+    """
+    from app.services.curriculum import get_topic  # avoid circular import
+
+    topic = await get_topic(topic_id, session)
+
+    # Free-preview topics are always accessible
+    if topic.is_free_preview:
+        return
+
+    # Check for an active, non-expired subscription
+    now = datetime.now(timezone.utc)
+    stmt = select(Subscription).where(
+        Subscription.user_id == current_user.id,
+        Subscription.status == "active",
+        Subscription.expires_at > now,
+    )
+    result = await session.execute(stmt)
+    subscription = result.scalar_one_or_none()
+
+    if subscription is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active subscription required to access this content.",
+            headers={"X-Upgrade-URL": "/pricing"},
+        )
+
