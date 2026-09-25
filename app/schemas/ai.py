@@ -32,3 +32,11 @@ class AIQueryResponse(BaseModel):
     topic_id: uuid.UUID
     queries_used_today: int
     daily_limit: int
+
+
+class AIQuotaResponse(BaseModel):
+    """Current AI query quota status for the authenticated user."""
+
+    queries_used_today: int
+    daily_limit: int
+    remaining: int
