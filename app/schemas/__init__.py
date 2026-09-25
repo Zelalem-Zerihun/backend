@@ -44,4 +44,31 @@ from app.schemas.progress import (  # noqa: F401
 from app.schemas.ai import (  # noqa: F401
     AIQueryRequest,
     AIQueryResponse,
+    AIQuotaResponse,
 )
+
+# ── Admin CMS ────────────────────────────────────────────────────────────
+from app.schemas.admin_cms import (  # noqa: F401
+    AdminAttachmentRead,
+    AdminModuleRead,
+    AdminTopicContentRead,
+    AdminTopicRead,
+    ModuleCreate,
+    ModuleUpdate,
+    TopicCreate,
+    TopicUpdate,
+)
+
+# ── Admin Analytics ──────────────────────────────────────────────────────
+from app.schemas.admin_analytics import (  # noqa: F401
+    AIUtilizationAnalytics,
+    CompletionFunnelItem,
+    FinanceSummaryAnalytics,
+    LearningEngagementAnalytics,
+    OverviewAnalytics,
+    PaymentMethodBreakdown,
+    RecentTransaction,
+    TopAIUser,
+    TopicEngagement,
+)
+
