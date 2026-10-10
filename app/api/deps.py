@@ -164,3 +164,24 @@ async def require_topic_access(
             headers={"X-Upgrade-URL": "/pricing"},
         )
 
+
+# ── Admin guard ─────────────────────────────────────────────────────────
+async def require_admin(user: CurrentUser) -> User:
+    """
+    Dependency that allows only users with ``role='admin'``.
+
+    Raises
+    ------
+    HTTPException 403
+        If the authenticated user is not an admin.
+    """
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
+    return user
+
+
+# Convenience annotated alias — use in router signatures for clean DI.
+AdminUser = Annotated[User, Depends(require_admin)]

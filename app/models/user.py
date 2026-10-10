@@ -57,6 +57,11 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    payment_transactions: Mapped[list["PaymentTransaction"]] = relationship(  # type: ignore[name-defined]
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
 
 
 class Subscription(Base):

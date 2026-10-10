@@ -15,6 +15,7 @@ from app.models.curriculum import (  # noqa: F401
 )
 from app.models.progress import UserProgress  # noqa: F401
 from app.models.ai import AIRateLimit  # noqa: F401
+from app.models.payment import PaymentTransaction  # noqa: F401
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "TopicAttachment",
     "UserProgress",
     "AIRateLimit",
+    "PaymentTransaction",
 ]
