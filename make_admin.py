@@ -1,18 +1,26 @@
 import asyncio
 import asyncpg
+from app.core.config import settings
 
 async def main():
-    conn = await asyncpg.connect("postgresql://postgres:1234@localhost:5432/accos_db")
+    db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    conn = await asyncpg.connect(db_url)
+    email = "zelalem.zerihun.b@gmail.com"
     result = await conn.execute(
         "UPDATE users SET role = 'admin' WHERE email = $1",
-        "zelalem.zerihun.b@gmail.com"
+        email
     )
     row = await conn.fetchrow(
         "SELECT email, role FROM users WHERE email = $1",
-        "zelalem.zerihun.b@gmail.com"
+        email
     )
     print("Result:", result)
-    print("User now:", row["email"], "->", row["role"])
+    if row:
+        print("User now:", row["email"], "->", row["role"])
+    else:
+        print(f"Note: User '{email}' does not exist yet. Register through the app first, then run this script to grant admin role.")
     await conn.close()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
+
