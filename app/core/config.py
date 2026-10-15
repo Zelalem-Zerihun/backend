@@ -47,12 +47,6 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     UPLOAD_URL_PREFIX: str = "/static/uploads"
     MAX_HTML_FILE_SIZE_MB: int = 10
-    MAX_ATTACHMENT_FILE_SIZE_MB: int = 50
-    ALLOWED_ATTACHMENT_TYPES: str = (
-        "application/pdf,"
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
 
     # ── Convenience helpers ──────────────────────────────────────────────
 
@@ -60,16 +54,6 @@ class Settings(BaseSettings):
     def max_html_file_bytes(self) -> int:
         """Maximum HTML upload size in bytes."""
         return self.MAX_HTML_FILE_SIZE_MB * 1024 * 1024
-
-    @property
-    def max_attachment_file_bytes(self) -> int:
-        """Maximum attachment upload size in bytes."""
-        return self.MAX_ATTACHMENT_FILE_SIZE_MB * 1024 * 1024
-
-    @property
-    def allowed_attachment_mimes(self) -> set[str]:
-        """Parse the comma-separated MIME string into a set."""
-        return {m.strip() for m in self.ALLOWED_ATTACHMENT_TYPES.split(",") if m.strip()}
 
     @property
     def async_database_url(self) -> str:

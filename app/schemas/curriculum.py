@@ -25,8 +25,7 @@ class TopicAttachmentRead(BaseModel):
     id: uuid.UUID
     title: str
     file_type: str
-    file_url: str
-    file_size_bytes: int | None = None
+    drive_link: str
     order_index: int
 
 
@@ -58,7 +57,9 @@ class TopicContentRead(BaseModel):
     ``GET /api/v1/topics/{id}/content``.
 
     Contains the pre-built HTML dashboard, NotebookLM references,
-    media URLs, and the list of downloadable attachments.
+    and the list of downloadable attachments (Drive links).
+
+    Note: video and audio are no longer included.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -68,8 +69,6 @@ class TopicContentRead(BaseModel):
     html_content: str | None = None
     notebooklm_url: str | None = None
     notebooklm_raw_notes: str | None = None
-    video_url: str | None = None
-    audio_url: str | None = None
     updated_at: datetime
 
 

@@ -33,10 +33,11 @@
 - `subscriptions`: id, user_id (FK), plan_type, status, starts_at, expires_at
 - `modules`: id, title, slug (unique), description, order_index, is_published, created_at
 - `topics`: id, module_id (FK), title, slug, order_index, is_free_preview, estimated_read_time, is_published. (Unique on `module_id` + `slug`)
-- `topic_contents`: id, topic_id (FK, unique), html_content, notebooklm_url, notebooklm_raw_notes, video_url, audio_url, updated_at
-- `topic_attachments`: id, topic_id (FK), title, file_type, file_url, file_size_bytes, order_index
+- `topic_contents`: id, topic_id (FK, unique), html_content, notebooklm_url, notebooklm_raw_notes, updated_at
+- `topic_attachments`: id, topic_id (FK), title, file_type ('pdf'|'pptx'), drive_link, order_index
 - `user_progress`: id, user_id (FK), topic_id (FK), is_completed, completed_at, last_visited_at. (Unique on `user_id` + `topic_id`)
 - `ai_rate_limits`: id, user_id (FK), query_date, query_count. (Unique on `user_id` + `query_date`)
+- `payment_transactions`: id, user_id (FK), plan_type, payment_method, transaction_reference (unique), amount, receipt_url, status, rejection_reason, verified_by, verified_at, created_at, updated_at
 
 ## 5. Development Roadmap
 - Step 1: Project setup, configuration (`pydantic-settings`), async DB engine & session.

@@ -24,6 +24,7 @@ from app.schemas.payment import (
     SubscribeRequest,
     SubscribeResponse,
     SubscriptionStatusResponse,
+    VerifyPaymentRequest,
 )
 from app.services.payment import (
     get_plan_catalogue,
@@ -149,18 +150,6 @@ async def admin_list_transactions(
 
 
 # ── Admin: POST /admin/transactions/{id}/verify ───────────────────────────
-
-
-
-
-from pydantic import BaseModel
-
-
-class VerifyPaymentRequest(BaseModel):
-    """Admin payload to approve or reject a pending payment."""
-
-    approve: bool = True
-    rejection_reason: str | None = None
 
 
 @router.post(

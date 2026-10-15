@@ -12,7 +12,6 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -127,11 +126,14 @@ class Topic(Base):
 
 class TopicContent(Base):
     """
-    Heavy payload for a single topic: the pre-built HTML dashboard,
-    NotebookLM URLs/raw notes, and media URLs.
+    Heavy payload for a single topic: the pre-built HTML dashboard
+    and NotebookLM URLs/raw notes.
 
     1-to-1 with ``Topic`` (enforced by ``unique=True`` on ``topic_id``).
     Intentionally in a separate table to enable payload separation.
+
+    Note: video and audio are no longer supported.  Documents (PDF/PPTX)
+    are referenced via Google Drive links stored on ``TopicAttachment``.
     """
 
     __tablename__ = "topic_contents"
@@ -154,12 +156,6 @@ class TopicContent(Base):
     notebooklm_raw_notes: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
-    video_url: Mapped[str | None] = mapped_column(
-        String(1000), nullable=True
-    )
-    audio_url: Mapped[str | None] = mapped_column(
-        String(1000), nullable=True
-    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -173,7 +169,11 @@ class TopicContent(Base):
 
 class TopicAttachment(Base):
     """
-    Downloadable resource linked to a topic (PDF, PPTX, XLSX, etc.).
+    Downloadable resource linked to a topic (PDF, PPTX, etc.).
+
+    Files are not stored on the server.  Instead, the admin provides a
+    Google Drive share link which is stored in ``drive_link``.
+    ``file_type`` is still recorded for display/icon purposes.
     """
 
     __tablename__ = "topic_attachments"
@@ -192,11 +192,8 @@ class TopicAttachment(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     file_type: Mapped[str] = mapped_column(
         String(20), nullable=False
-    )  # 'pdf' | 'pptx' | 'xlsx'
-    file_url: Mapped[str] = mapped_column(String(1000), nullable=False)
-    file_size_bytes: Mapped[int | None] = mapped_column(
-        BigInteger, nullable=True
-    )
+    )  # 'pdf' | 'pptx'
+    drive_link: Mapped[str] = mapped_column(String(2000), nullable=False)
     order_index: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )

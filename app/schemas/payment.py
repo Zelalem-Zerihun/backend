@@ -124,3 +124,30 @@ class SubscriptionStatusResponse(BaseModel):
     status: str | None = None
     expires_at: datetime | None = None
     days_remaining: int | None = None
+
+
+# ── Admin ─────────────────────────────────────────────────────────────────
+
+
+class VerifyPaymentRequest(BaseModel):
+    """
+    Admin payload to approve or reject a pending payment transaction.
+
+    ``POST /payment/admin/transactions/{transaction_id}/verify``
+
+    Fields
+    ------
+    approve
+        ``True`` to mark the transaction as completed and activate the
+        subscription.  ``False`` to reject it.
+    rejection_reason
+        Required (or at least helpful) when ``approve=False``.
+        Recorded in ``payment_transactions.rejection_reason``.
+    """
+
+    approve: bool = True
+    rejection_reason: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Reason for rejection (required when approve=False).",
+    )

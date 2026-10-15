@@ -152,6 +152,8 @@ class AdminTopicContentRead(BaseModel):
 
     Returned by ``GET /admin/cms/topics/{topic_id}/content`` so admins
     can verify uploaded HTML and metadata before publishing.
+
+    Note: video and audio are no longer supported.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -161,8 +163,6 @@ class AdminTopicContentRead(BaseModel):
     html_content: str | None = None
     notebooklm_url: str | None = None
     notebooklm_raw_notes: str | None = None
-    video_url: str | None = None
-    audio_url: str | None = None
     updated_at: datetime
 
 
@@ -171,9 +171,30 @@ class AdminTopicContentRead(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+class AttachmentCreate(BaseModel):
+    """
+    Payload for ``POST /admin/cms/topics/{topic_id}/attachments``.
+
+    Instead of uploading a file, the admin provides a Google Drive
+    share link alongside the document title and type.
+    """
+
+    title: str = Field(min_length=1, max_length=255)
+    file_type: str = Field(
+        description="Document type: 'pdf' or 'pptx'.",
+        pattern=r"^(pdf|pptx)$",
+    )
+    drive_link: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Google Drive share link for the document.",
+    )
+    order_index: int = Field(default=0, ge=0)
+
+
 class AdminAttachmentRead(BaseModel):
     """
-    Admin-facing attachment metadata, returned after upload and in
+    Admin-facing attachment metadata, returned after creation and in
     listing responses.
     """
 
@@ -183,6 +204,5 @@ class AdminAttachmentRead(BaseModel):
     topic_id: uuid.UUID
     title: str
     file_type: str
-    file_url: str
-    file_size_bytes: int | None = None
+    drive_link: str
     order_index: int

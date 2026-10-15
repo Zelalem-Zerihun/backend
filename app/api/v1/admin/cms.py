@@ -6,7 +6,7 @@ Provides CRUD endpoints for:
   2. **Topics**     – create under a module, update metadata/flags, delete.
   3. **Content**    – upload HTML file + optional metadata URLs (multipart).
                       Preview current content payload.
-  4. **Attachments**– upload validated PDF/PPTX/XLSX; delete by attachment ID.
+  4. **Attachments**– add Drive link (PDF/PPTX); delete by attachment ID.
 
 All endpoints require the ``require_admin`` dependency which verifies:
   * A valid, non-expired JWT with a matching ``session_id`` (single-session).
@@ -18,7 +18,7 @@ Error contract
 * ``401 Unauthorized`` – missing or invalid token / invalidated session.
 * ``403 Forbidden`` – authenticated but not an admin.
 * ``404 Not Found`` – referenced resource does not exist.
-* ``409 Conflict`` – unique constraint violation (duplicate slug, etc.).
+* ``409 Conflict`` – unique constraint violation (duplicate slug, etc.)
 
 Transaction safety
 ~~~~~~~~~~~~~~~~~~
@@ -37,13 +37,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AdminUser, require_admin
 from app.core.database import get_async_session
-from app.core.storage import delete_attachment, read_html_upload, save_attachment
+from app.core.storage import read_html_upload
 from app.models.curriculum import Module, Topic, TopicAttachment, TopicContent
 from app.schemas.admin_cms import (
     AdminAttachmentRead,
     AdminModuleRead,
     AdminTopicContentRead,
     AdminTopicRead,
+    AttachmentCreate,
     ModuleCreate,
     ModuleUpdate,
     TopicCreate,
@@ -154,9 +155,8 @@ async def delete_module(
     Permanently delete a module and **all** its child topics, contents,
     and attachments via ``CASCADE`` foreign-key rules.
 
-    This operation is irreversible.  Physical attachment files on disk
-    are **not** removed by this endpoint (use the individual attachment
-    DELETE endpoint for that or run a periodic orphan-file cleanup job).
+    This operation is irreversible.  Since attachments are Google Drive
+    links (no files stored server-side), only database records are removed.
     """
     module = await session.get(Module, module_id)
     if module is None:
@@ -272,9 +272,8 @@ async def delete_topic(
     Permanently delete a topic along with its ``TopicContent`` record
     and all ``TopicAttachment`` records (via CASCADE).
 
-    Physical attachment files on disk are **not** removed by this
-    endpoint.  To clean up disk files first, use the individual
-    attachment DELETE endpoint before deleting the topic.
+    Since attachments are Google Drive links (no files stored server-side),
+    only database records are removed.
     """
     topic = await session.get(Topic, topic_id)
     if topic is None:
@@ -301,8 +300,6 @@ async def upload_topic_content(
     html_file: UploadFile | None = None,
     notebooklm_url: Annotated[str | None, Form()] = None,
     notebooklm_raw_notes: Annotated[str | None, Form()] = None,
-    video_url: Annotated[str | None, Form()] = None,
-    audio_url: Annotated[str | None, Form()] = None,
 ) -> AdminTopicContentRead:
     """
     Upload or replace the HTML dashboard and optional metadata for a topic.
@@ -313,12 +310,13 @@ async def upload_topic_content(
       ``topic_contents.html_content``.  The file is **not** stored on disk.
     - ``notebooklm_url`` *(optional)* – Public NotebookLM podcast/notebook URL.
     - ``notebooklm_raw_notes`` *(optional)* – Raw note text for AI context injection.
-    - ``video_url`` *(optional)* – Video stream URL (e.g., YouTube embed or CDN).
-    - ``audio_url`` *(optional)* – Audio file URL.
 
     If a ``TopicContent`` record already exists for this topic, it is
     updated in-place (upsert semantics).  Only explicitly supplied
     fields are overwritten; omitted fields retain their current values.
+
+    Note: ``video_url`` and ``audio_url`` have been removed.  Documents
+    (PDF/PPTX) are managed via the attachments endpoint using Drive links.
     """
     # Verify topic exists
     topic = await session.get(Topic, topic_id)
@@ -346,10 +344,6 @@ async def upload_topic_content(
         content.notebooklm_url = notebooklm_url
     if notebooklm_raw_notes is not None:
         content.notebooklm_raw_notes = notebooklm_raw_notes
-    if video_url is not None:
-        content.video_url = video_url
-    if audio_url is not None:
-        content.audio_url = audio_url
 
     await session.commit()
     await session.refresh(content)
@@ -398,39 +392,33 @@ async def get_topic_content_admin(
     "/topics/{topic_id}/attachments",
     response_model=AdminAttachmentRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Upload an attachment (PDF, PPTX, XLSX) to a topic",
+    summary="Add a Drive-link attachment (PDF or PPTX) to a topic",
 )
-async def upload_attachment(
+async def add_attachment(
     topic_id: uuid.UUID,
     _admin: AdminUser,
+    payload: AttachmentCreate,
     session: DBSession,
-    file: UploadFile,
-    title: Annotated[str, Form(min_length=1, max_length=255)],
 ) -> AdminAttachmentRead:
     """
-    Upload a downloadable resource and associate it with the topic.
+    Register a Google Drive document link as an attachment for a topic.
 
-    **Multipart form fields:**
-    - ``file`` – The file to upload.  Only PDF, PPTX, and XLSX are accepted
-      (validated via MIME type).  Maximum size: ``MAX_ATTACHMENT_FILE_SIZE_MB``.
+    **Request body (JSON):**
     - ``title`` – Human-readable label (e.g., *"Cost Accounting Slide Deck – Lesson 1"*).
+    - ``file_type`` – ``"pdf"`` or ``"pptx"``.
+    - ``drive_link`` – Google Drive share URL for the document.
+    - ``order_index`` *(optional, default 0)* – Display position within the topic's
+      attachment list.  Pass ``0`` to append at the front, or omit and reorder later.
 
-    The file is saved to ``uploads/attachments/{topic_id}/`` and a
-    ``TopicAttachment`` database record is created with the public URL,
-    file type, and byte size.
-
-    ``order_index`` defaults to one greater than the current maximum for
-    the topic (appended to the end of the list).
+    A ``TopicAttachment`` record is created with the Drive link.
+    No file is stored on the server.
     """
     # Verify topic exists
     topic = await session.get(Topic, topic_id)
     if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found.")
 
-    # Save file to disk and get metadata
-    result = await save_attachment(file, topic_id)
-
-    # Determine next order_index (max + 1)
+    # Determine next order_index (max + 1) if not explicitly set
     from sqlalchemy import func
 
     max_stmt = select(func.max(TopicAttachment.order_index)).where(
@@ -438,14 +426,13 @@ async def upload_attachment(
     )
     max_result = await session.execute(max_stmt)
     current_max: int | None = max_result.scalar_one_or_none()
-    next_order = (current_max or 0) + 1
+    next_order = payload.order_index if payload.order_index else (current_max or 0) + 1
 
     attachment = TopicAttachment(
         topic_id=topic_id,
-        title=title,
-        file_type=result.file_type,
-        file_url=result.file_url,
-        file_size_bytes=result.file_size_bytes,
+        title=payload.title,
+        file_type=payload.file_type,
+        drive_link=payload.drive_link,
         order_index=next_order,
     )
     session.add(attachment)
@@ -457,7 +444,7 @@ async def upload_attachment(
 @router.delete(
     "/attachments/{attachment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Remove an attachment file and its database record",
+    summary="Remove an attachment record",
 )
 async def remove_attachment(
     attachment_id: uuid.UUID,
@@ -465,11 +452,10 @@ async def remove_attachment(
     session: DBSession,
 ) -> None:
     """
-    Delete an attachment from both disk and the database.
+    Delete a ``TopicAttachment`` record from the database.
 
-    The physical file is removed first (idempotent – no error if the
-    file is already missing), then the ``TopicAttachment`` record is
-    deleted.
+    Since attachments are Drive links (no file stored server-side),
+    this only removes the database record.
     """
     attachment = await session.get(TopicAttachment, attachment_id)
     if attachment is None:
@@ -477,9 +463,6 @@ async def remove_attachment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Attachment not found.",
         )
-
-    # Remove the physical file (best-effort; missing file is not an error)
-    delete_attachment(attachment.file_url)
 
     await session.delete(attachment)
     await session.commit()
